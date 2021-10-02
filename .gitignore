@@ -117,3 +117,4 @@ work_dirs/
 *.pth
 tools/work_dirs/
 scripts/
+core.*

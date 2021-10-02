@@ -2,7 +2,7 @@ from numbers import Number
 
 import numpy as np
 import torch
-
+from sklearn.metrics import average_precision_score
 
 def calculate_confusion_matrix(pred, target):
     """Calculate confusion matrix according to the prediction and target.
@@ -245,3 +245,20 @@ def support(pred, target, average_mode='macro'):
         else:
             raise ValueError(f'Unsupport type of averaging {average_mode}.')
     return res
+
+
+def auc(pred_score, target):
+    if isinstance(pred_score, torch.Tensor):
+        pred_score_np = pred_score.to('cpu').numpy()
+    else:
+        pred_score_np = pred_score
+    # pred_score = np.max(pred_score_np, axis=1)
+    # score = pred_score_np[target[:, np.newaxis]]
+    score = []
+    # for i in range(pred_score_np.shape[0]):
+    #     score.append(pred_score_np[i, target[i]])
+    one_hot = np.zeros(shape=(target.shape[0], target.max() + 1))
+    for i in range(target.shape[0]):
+        one_hot[i, target[i]] = 1
+    return average_precision_score(one_hot, pred_score)
+

@@ -14,7 +14,7 @@ train_pipeline = [
     # dict(type='ImageToTensor', keys=['img']),
 
     dict(type='ToTensor', keys=['gt_label', 'img']),
-    dict(type='Collect', keys=['img', 'gt_label'])
+    dict(type='Collect', keys=['img', 'gt_label', 'img_shape', 'ori_shape'])
 ]
 test_pipeline = [
     dict(type='LoadImageFromNIIFile'),
@@ -23,8 +23,8 @@ test_pipeline = [
          instensity_min_val=0.5,
          instensity_max_val=99.5),
     dict(type='ResizeMedical', size=(160, 160, 80)),
-    dict(type='ToTensor', keys=['img']),
-    dict(type='Collect', keys=['img'])
+    dict(type='ToTensor', keys=['img', 'gt_label']),
+    dict(type='Collect', keys=['img', 'gt_label', 'img_shape', 'ori_shape'])
 ]
 data = dict(
     samples_per_gpu=8,

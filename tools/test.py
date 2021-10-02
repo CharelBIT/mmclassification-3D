@@ -12,7 +12,7 @@ from mmcv.runner import get_dist_info, init_dist, load_checkpoint
 from mmcls.apis import multi_gpu_test, single_gpu_test
 from mmcls.datasets import build_dataloader, build_dataset
 from mmcls.models import build_classifier
-
+from sklearn.metrics import average_precision_score
 # TODO import `wrap_fp16_model` from mmcv and delete them from mmcls
 try:
     from mmcv.runner import wrap_fp16_model
@@ -154,7 +154,10 @@ def main():
                                             args.metric_options)
             results.update(eval_results)
             for k, v in eval_results.items():
-                print(f'\n{k} : {v:.2f}')
+                try:
+                    print(f'\n{k} : {v:.2f}')
+                except:
+                    continue
         if args.out:
             scores = np.vstack(outputs)
             pred_score = np.max(scores, axis=1)
@@ -167,6 +170,7 @@ def main():
                 'pred_class': pred_class
             })
             print(f'\ndumping results to {args.out}')
+            # print("AUC score: {}".format(average_precision_score()))
             mmcv.dump(results, args.out)
 
 

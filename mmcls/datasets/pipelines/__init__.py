@@ -12,7 +12,8 @@ from .transforms import (CenterCrop, ColorJitter, Lighting, RandomCrop,
 
 from .transforms3D import (ResampleMedicalImage, RandomCropMedical,
                            ExtractDataFromObj, NormalizeMedical, ConcatImage,
-                           RandomFlip3D, IgnoreBlackArea, RandomCropMedicalWithForeground)
+                           RandomFlip3D, IgnoreBlackArea, RandomCropMedicalWithForeground,
+                           CropMedicalWithAnnotations)
 
 from .loading3D import LoadImageFromNIIFile
 
@@ -25,6 +26,6 @@ __all__ = [
     'Contrast', 'Brightness', 'Sharpness', 'AutoAugment', 'SolarizeAdd',
     'Cutout', 'RandAugment', 'Lighting', 'ColorJitter', 'RandomErasing',
     "ResampleMedicalImage", "RandomCropMedical", "ExtractDataFromObj",
-    "NormalizeMedical", "ConcatImage", "RandomFlip3D",
+    "NormalizeMedical", "ConcatImage", "RandomFlip3D", "CropMedicalWithAnnotations"
      "IgnoreBlackArea", "RandomCropMedicalWithForeground", 'LoadImageFromNIIFile'
 ]

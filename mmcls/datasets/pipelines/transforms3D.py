@@ -280,11 +280,15 @@ class ExtractDataFromObj(object):
             if mmcv.is_list_of(results["img"], nib.Nifti1Image):
                 for i, img_nii in enumerate(results["img"]):
                     results["img"][i] = np.squeeze(img_nii.get_fdata(dtype=np.float32))
+                results['ori_shape'] = results['img'][0].shape
+                results['img_shape'] = results['img'][0].shape
             else:
                 if not isinstance(results["img"], nib.Nifti1Image):
                     print("[ERROR] Unsupported image type: {}!".format(type(results["img"])))
                     raise ValueError
                 results["img"] = np.squeeze(results["img"].get_fdata(dtype=np.float32))
+                results['ori_shape'] = results['img'].shape
+                results['img_shape'] = results['img'].shape
         return results
 
 @PIPELINES.register_module()
@@ -435,7 +439,7 @@ class RandomCropMedicalWithForeground(object):
 #         return img
 
 @PIPELINES.register_module()
-class RandomCropMedicalWithAnnotations(object):
+class CropMedicalWithAnnotations(object):
     def __init__(self, pad_mode=None, **kwargs):
         self.pad_mode = pad_mode
         self.kwargs = kwargs
@@ -460,32 +464,32 @@ class RandomCropMedicalWithAnnotations(object):
     def _check_cfg(self, pad_mode, kwargs):
         if pad_mode == 'static':
             assert 'static_size' in kwargs
+        elif pad_mode =='ratio':
+            assert 'relative_ratio' in kwargs
 
     @staticmethod
     def _get_annotation_region(mask, pad_mode, kwargs):
         location = np.where(mask > 0)
         crop_region = []
         for i, loc in enumerate(location):
-            # crop_region.append(np.min(loc))
-            # crop_region.append(np.max(loc) + 1)
             min_l = np.min(loc)
             max_r = np.max(loc)
             if pad_mode == 'static':
                 size = kwargs['static_size'][i]
-                assert size <= mask.shape[i]
-                left = np.random.randint(0, min_l + 1)
-                right = np.random.randint(max_r, mask.shape[i])
-                margin = (right - left) - size
-                margin_l = int(np.random.uniform() * margin)
-                left = max(0, left + margin_l)
-                right = min(mask.shape[i], left + size)
-                left = min(0, right - size)
-
-                # left = np.random.randint(0, min_l + 1)
-                # right = min(left + size, mask.shape[i])
-                # left = max(right - size, 0)
-                crop_region.append(left)
-                crop_region.append(right)
+                margin = (max_r - min_l) + size * 2
+                left = max(min_l - size, 0)
+                right = min(mask.shape[i], margin + left + 1)
+                left = max(0, right - margin)
+                crop_region.append(int(left))
+                crop_region.append(int(right))
+            elif pad_mode == 'relative':
+                ratio = kwargs['relative_ratio'][i]
+                margin = (max_r - min_l) * (1 + 2 * ratio)
+                left = max(min_l - ratio * (max_r - min_l), 0)
+                right = min(mask.shape[i], margin + left + 1)
+                left = max(0, right - margin)
+                crop_region.append(int(left))
+                crop_region.append(int(right))
             elif pad_mode == None:
                 crop_region.append(min_l)
                 crop_region.append(max_r)
@@ -711,6 +715,7 @@ class ResizeMedical(object):
                     mode='area'
                 )
                 results['img'][i] = resized.squeeze(0).squeeze(0).detach().cpu().numpy()
+                results['img_shape'] = results['img'][0].shape
         else:
             resized = torch.nn.functional.interpolate(
                 torch.as_tensor(np.ascontiguousarray(results['img']), dtype=torch.float).unsqueeze(0).unsqueeze(0),
@@ -718,6 +723,7 @@ class ResizeMedical(object):
                 mode='area'
             )
             results['img'] = resized.squeeze(0).squeeze(0).detach().cpu().numpy()
+            results['img_shape'] = results['img'].shape
         return results
 
 

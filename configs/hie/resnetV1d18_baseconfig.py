@@ -51,7 +51,7 @@ data = dict(
         ann_file='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/t1_zw_fse_val.txt',
         pipeline=test_pipeline,
         modes=['t1_zw']))
-evaluation = dict(interval=2, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support'])
+evaluation = dict(interval=2, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
 
 
 norm_cfg = dict(type='BN3d', requires_grad=True)

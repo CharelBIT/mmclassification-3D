@@ -49,7 +49,7 @@ def main():
     if args.options is not None:
         cfg.merge_from_dict(args.options)
 
-    model = build_classifier(cfg.model)
+    # model = build_classifier(cfg.model)
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
@@ -57,7 +57,7 @@ def main():
     for info in dataset.data_infos:
         if info['img_prefix'] is not None:
             filename = osp.join(info['img_prefix'],
-                                info['img_info']['filename'])
+                                info['img_info']['filename'][0])
         else:
             filename = info['img_info']['filename']
         filenames.append(filename)
@@ -74,6 +74,8 @@ def main():
     for i in range(len(gt_labels)):
         output = dict()
         for k in outputs.keys():
+            if isinstance(outputs[k], float):
+                continue
             output[k] = outputs[k][i]
         outputs_list.append(output)
 
@@ -88,11 +90,13 @@ def main():
         else:
             fail.append(output)
 
-    success = success[:args.topk]
-    fail = fail[:args.topk]
-
-    save_imgs(args.out_dir, 'success', success, model)
-    save_imgs(args.out_dir, 'fail', fail, model)
+    # success = success[:args.topk]
+    # fail = fail[:args.topk]
+    # print(fail)
+    for f in fail:
+        print(f)
+    # save_imgs(args.out_dir, 'success', success, model)
+    # save_imgs(args.out_dir, 'fail', fail, model)
 
 
 if __name__ == '__main__':

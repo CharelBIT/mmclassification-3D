@@ -202,5 +202,5 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                         })
                     else:
                         eval_results[key] = values
-
+        # eval_results['gt_labels'] = gt_labels.tolist()
         return eval_results
