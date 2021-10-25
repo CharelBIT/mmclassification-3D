@@ -1062,3 +1062,19 @@ class Albu(object):
     def __repr__(self):
         repr_str = self.__class__.__name__ + f'(transforms={self.transforms})'
         return repr_str
+
+@PIPELINES.register_module()
+class CropWithAnnotation(object):
+    def __init__(self):
+        pass
+    def __call__(self, results):
+        if 'ann_info' not in results:
+            print('[WARNING] \'ann_info\' not in results')
+            return results
+        assert len(results['ann_info']) == 1
+        bbox = results['ann_info'][0]['bbox']
+        ystart, xstart, yend, xend = bbox[1], bbox[0], bbox[1] + bbox[3], bbox[0] + bbox[2]
+        results['img'] = results['img'][ystart: yend + 1, xstart: xend + 1]
+        results['img_shape'] = results['img'].shape
+        results['ori_shape'] = results['img'].shape
+        return results

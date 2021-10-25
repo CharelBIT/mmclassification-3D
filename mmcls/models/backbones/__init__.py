@@ -11,7 +11,7 @@ from .seresnet import SEResNet
 from .seresnext import SEResNeXt
 from .shufflenet_v1 import ShuffleNetV1
 from .shufflenet_v2 import ShuffleNetV2
-# from .swin_transformer import SwinTransformer
+from .swin_transformer import SwinTransformer
 from .vgg import VGG
 from .vision_transformer import VisionTransformer
 
@@ -19,5 +19,5 @@ __all__ = [
     'LeNet5', 'AlexNet', 'VGG', 'RegNet', 'ResNet', 'ResNeXt', 'ResNetV1d',
     'ResNeSt', 'ResNet_CIFAR', 'SEResNet', 'SEResNeXt', 'ShuffleNetV1',
     'ShuffleNetV2', 'MobileNetV2', 'MobileNetV3', 'VisionTransformer',
-    # 'SwinTransformer'
+    'SwinTransformer'
 ]
