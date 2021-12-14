@@ -1,3 +1,5 @@
+import math
+
 import torch.nn.functional
 
 from ..builder import PIPELINES
@@ -197,9 +199,8 @@ class RandomCropMedical(object):
             occupy.
     """
 
-    def __init__(self, crop_size, cat_max_ratio=1., ignore_index=255):
+    def __init__(self, crop_size, ignore_index=255):
         self.crop_size = crop_size
-        self.cat_max_ratio = cat_max_ratio
         self.ignore_index = ignore_index
 
     def get_crop_region(self, img):
@@ -239,16 +240,6 @@ class RandomCropMedical(object):
             img = results["img"]
         assert isinstance(img, np.ndarray) and len(img.shape) == len(self.crop_size)
         crop_region = self.get_crop_region(img)
-        if self.cat_max_ratio < 1.:
-            # Repeat 10 times
-            for _ in range(20):
-                seg_temp = self.crop(results['gt_semantic_seg'], crop_region)
-                labels, cnt = np.unique(seg_temp, return_counts=True)
-                cnt = cnt[labels != self.ignore_index]
-                if len(cnt) > 1 and np.max(cnt) / np.sum(
-                        cnt) < self.cat_max_ratio:
-                    break
-                crop_region = self.get_crop_region(img)
         if isinstance(results["img"], list):
             for i in range(len(results["img"])):
                 results["img"][i] = self.crop(results["img"][i], crop_region)
@@ -266,7 +257,75 @@ class RandomCropMedical(object):
             # print("[DEBUG] foreground {}: {}".format(key, np.where((results[key] > 0) * (results[key] < 5))[0].shape))
             # print("[DEBUG] ignore {}: {}".format(key, np.where(results[key]== 255)[0].shape))
         return results
+@PIPELINES.register_module()
+class CentralCropMedical(object):
+    """Random crop the image & seg.
 
+    Args:
+        crop_size (tuple): Expected size after cropping, (h, w).
+        cat_max_ratio (float): The maximum ratio that single category could
+            occupy.
+    """
+
+    def __init__(self, crop_size, cat_max_ratio=1., ignore_index=255):
+        self.crop_size = crop_size
+        self.cat_max_ratio = cat_max_ratio
+        self.ignore_index = ignore_index
+
+    def get_crop_region(self, img):
+        """Randomly get a crop bounding box."""
+        margin_x = max(img.shape[0] - self.crop_size[0], 0)
+        margin_y = max(img.shape[1] - self.crop_size[1], 0)
+        margin_z = max(img.shape[2] - self.crop_size[2], 0)
+        offset_x = int(math.floor(margin_x / 2))
+        offset_y = int(math.floor(margin_y / 2))
+        offset_z = int(math.floor(margin_z / 2))
+        crop_x1, crop_x2 = offset_x, offset_x + self.crop_size[0]
+        crop_y1, crop_y2 = offset_y, offset_y + self.crop_size[1]
+        crop_z1, crop_z2 = offset_z, offset_z + self.crop_size[2]
+        return crop_x1, crop_x2, crop_y1, crop_y2, crop_z1, crop_z2
+
+    def crop(self, img, crop_region):
+        """Crop from ``img``"""
+        # crop_y1, crop_y2, crop_x1, crop_x2 = crop_region
+        # img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
+        crop_x1, crop_x2, crop_y1, crop_y2, crop_z1, crop_z2 = crop_region
+        img = img[crop_x1: crop_x2, crop_y1: crop_y2, crop_z1: crop_z2]
+        return img
+
+    def __call__(self, results):
+        """Call function to randomly crop images, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+        if isinstance(results["img"], list):
+            img = results["img"][0]
+        else:
+            img = results["img"]
+        assert isinstance(img, np.ndarray) and len(img.shape) == len(self.crop_size)
+        crop_region = self.get_crop_region(img)
+        if isinstance(results["img"], list):
+            for i in range(len(results["img"])):
+                results["img"][i] = self.crop(results["img"][i], crop_region)
+            img_shape = results["img"][0].shape
+        else:
+            results["img"] = self.crop(results["img"], crop_region)
+            img_shape = results["img"].shape
+        # img = self.crop(img, crop_region)
+        # img_shape = img.shape
+        # results['img'] = img
+        results['img_shape'] = img_shape
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+            results[key] = self.crop(results[key], crop_region)
+            # print("[DEBUG] foreground {}: {}".format(key, np.where((results[key] > 0) * (results[key] < 5))[0].shape))
+            # print("[DEBUG] ignore {}: {}".format(key, np.where(results[key]== 255)[0].shape))
+        return results
 @PIPELINES.register_module()
 class ExtractDataFromObj(object):
     def __init__(self):
@@ -503,6 +562,8 @@ class CropMedicalWithAnnotations(object):
         # img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
         crop_x1, crop_x2, crop_y1, crop_y2, crop_z1, crop_z2 = crop_region
         img = img[crop_x1: crop_x2, crop_y1: crop_y2, crop_z1: crop_z2]
+        if np.any(np.array(img.shape) == 0):
+            pass
         return img
 
 @PIPELINES.register_module()
@@ -597,6 +658,18 @@ class NormalizeMedical(object):
                 desired = results["img"][mask]
                 mean_val, std_val = desired.mean(), desired.std()
                 results["img"] = (results["img"] - mean_val) / (std_val + 10e-5)
+        elif self.norm_type == 'wcww':
+            window_min = self.kwargs.get('window_center', -600) - self.kwargs.get('window_width', 700) / 2
+            window_width = self.kwargs.get('window_width', 700)
+            window_max = window_min + window_width
+            if isinstance(results["img"], list):
+                for i, img_np in enumerate(results["img"]):
+                    # results["img"][i] = (img_np - window_min) / (window_width + 10e-5)
+                    results['img'][i] = np.clip(results['img'][i], a_min=window_min, a_max=window_max)
+                    results['img'][i] = (results['img'][i] - window_min) / window_width
+            else:
+                results['img'] = np.clip(results['img'], a_min=window_min, a_max=window_max)
+                results['img'] = (results['img'] - window_min) / window_width
         else:
             print("[ERROR] norm type: {} is not implement")
             raise NotImplementedError
@@ -646,7 +719,7 @@ class BinaryCateogry(object):
        return results
 
 @PIPELINES.register_module()
-class RandomFlip3D(object):
+class RandomFlipMedical(object):
     """Flip the image & seg.
 
     If the input dict contains the key "flip", then the flag will be used,
@@ -659,13 +732,14 @@ class RandomFlip3D(object):
             'horizontal' and 'vertical'. Default: 'horizontal'.
     """
 
-    @deprecated_api_warning({'flip_ratio': 'prob'}, cls_name='RandomFlip3D')
-    def __init__(self, prob=None, direction=["sagittal", "coronal", "transverse"]):
+    @deprecated_api_warning({'flip_ratio': 'prob'}, cls_name='RandomFlipMedical')
+    def __init__(self, prob=None, direction=0):
         self.prob = prob
+
         self.direction = direction
         if prob is not None:
             assert prob >= 0 and prob <= 1
-        assert direction in ['horizontal', 'vertical']
+        assert direction in [0, 1, 2]
 
     def __call__(self, results):
         """Call function to flip bounding boxes, masks, semantic segmentation
@@ -686,18 +760,28 @@ class RandomFlip3D(object):
             results['flip_direction'] = self.direction
         if results['flip']:
             # flip image
-            results['img'] = mmcv.imflip(
-                results['img'], direction=results['flip_direction'])
-
+            if mmcv.is_list_of(results['img'], np.ndarray):
+                for i in range(len(results['img'])):
+                    results['img'][i] = self.flip_image(results['img'][i], self.direction).copy()
+            else:
+                results['img'] = self.flip_image(results['img'], self.direction).copy()
             # flip segs
             for key in results.get('seg_fields', []):
                 # use copy() to make numpy stride positive
-                results[key] = mmcv.imflip(
-                    results[key], direction=results['flip_direction']).copy()
+                results[key] = self.flip_image(results[key], self.direction).copy()
         return results
 
     def __repr__(self):
         return self.__class__.__name__ + f'(prob={self.prob})'
+
+    def flip_image(self, image, direction):
+        assert len(image.shape) > direction
+        if direction == 0:
+            return image[::-1, ...]
+        elif direction == 1:
+            return image[:, ::-1, ...]
+        elif direction == 2:
+            return image[:, :, ::-1]
 
 
 @PIPELINES.register_module()
@@ -730,3 +814,91 @@ class ResizeMedical(object):
 
     def __repr__(self):
         return self.__class__.__name__ + f'(size={self.size})'
+
+# @PIPELINES.register_module()
+# class SelectSlice(object):
+#     def __init__(self, out_channels=3, select_index=0):
+#         self._out_channels = out_channels
+#         self._select_index = select_index
+#
+#     def __call__(self, results):
+#         if "gt_semantic_seg" not in results:
+#             print("[WARNING] key: gt_semantic_seg not in input data")
+#             return results
+#         mask = results["gt_semantic_seg"]
+#         index = self._select_slice(mask, self._out_channels, self._select_index)
+#
+#     def _select_slice(self, mask, out_channel, index):
+#         location = np.argwhere(mask)
+#         (start_0, start_1, start_2), (end_0, end_1, end_2) = location.min(axis=0), location.max(axis=0) + 1
+#         if index == 0:
+#             num_points = np.sum(mask, axis=[1, 2])
+#             slice_idx = np.argmax(num_points)
+#             slices_idx = self._center_select(slice_idx, out_channel)
+
+# @PIPELINES.register_module()
+# class RandomFlipMedical(object):
+#     """Flip the image & seg.
+#
+#     If the input dict contains the key "flip", then the flag will be used,
+#     otherwise it will be randomly decided by a ratio specified in the init
+#     method.
+#
+#     Args:
+#         prob (float, optional): The flipping probability. Default: None.
+#         direction(str, optional): The flipping direction. Options are
+#             'horizontal' and 'vertical'. Default: 'horizontal'.
+#     """
+#
+#     @deprecated_api_warning({'flip_ratio': 'prob'}, cls_name='RandomFlipMedical')
+#     def __init__(self, prob=None, direction=0):
+#         self.prob = prob
+#
+#         self.direction = direction
+#         if prob is not None:
+#             assert prob >= 0 and prob <= 1
+#         assert direction in [0, 1, 2]
+#
+#     def __call__(self, results):
+#         """Call function to flip bounding boxes, masks, semantic segmentation
+#         maps.
+#
+#         Args:
+#             results (dict): Result dict from loading pipeline.
+#
+#         Returns:
+#             dict: Flipped results, 'flip', 'flip_direction' keys are added into
+#                 result dict.
+#         """
+#
+#         if 'flip' not in results:
+#             flip = True if np.random.rand() < self.prob else False
+#             results['flip'] = flip
+#         if 'flip_direction' not in results:
+#             results['flip_direction'] = self.direction
+#         if results['flip']:
+#             # flip image
+#             if mmcv.is_list_of(results['img'], np.ndarray):
+#                 for i in range(len(results['img'])):
+#                     results['img'][i] = self.flip_image(results['img'][i], self.direction).copy()
+#             else:
+#                 results['img'] = self.flip_image(results['img'], self.direction).copy()
+#             # flip segs
+#             for key in results.get('seg_fields', []):
+#                 # use copy() to make numpy stride positive
+#                 results[key] = self.flip_image(results[key], self.direction).copy()
+#         return results
+#
+#     def __repr__(self):
+#         return self.__class__.__name__ + f'(prob={self.prob})'
+#
+#     def flip_image(self, image, direction):
+#         assert len(image.shape) > direction
+#         if direction == 0:
+#             return image[::-1, ...]
+#         elif direction == 1:
+#             return image[:, ::-1, ...]
+#         elif direction == 2:
+#             return image[:, :, ::-1]
+
+

@@ -3,7 +3,8 @@ import math
 import random
 from numbers import Number
 from typing import Sequence
-
+import cv2
+from mmcls.utils import cv2_util
 import mmcv
 import numpy as np
 
@@ -1062,3 +1063,49 @@ class Albu(object):
     def __repr__(self):
         repr_str = self.__class__.__name__ + f'(transforms={self.transforms})'
         return repr_str
+
+@PIPELINES.register_module()
+class CropWithAnnotation(object):
+    def __init__(self):
+        pass
+    def __call__(self, results):
+        if 'ann_info' not in results:
+            print('[WARNING] \'ann_info\' not in results')
+            return results
+        assert len(results['ann_info']) == 1
+        bbox = results['ann_info'][0]['bbox']
+        ystart, xstart, yend, xend = bbox[1], bbox[0], bbox[1] + bbox[3], bbox[0] + bbox[2]
+        results['img'] = results['img'][ystart: yend + 1, xstart: xend + 1]
+        results['img_shape'] = results['img'].shape
+        results['ori_shape'] = results['img'].shape
+        return results
+@PIPELINES.register_module()
+class CropWithMaskAnnotation(object):
+    def __init__(self):
+        pass
+    def __call__(self, results):
+        if 'gt_semantic_seg' not in results:
+            print('[WARNING] \'ann_info\' not in results')
+            return results
+
+        contours, hierarchy = cv2_util.findContours(results['gt_semantic_seg'],
+                                                    cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # if len(contours) != 1:
+        #     print("[WARNING] {} Find contours > 1".format(results['img_info']))
+        bboxes = np.asarray([cv2.boundingRect(cnt) for cnt in contours])
+        bboxes[:, 2] = bboxes[:, 2] + bboxes[:, 0] + 1
+        bboxes[:, 3] = bboxes[:, 3] + bboxes[:, 1] + 1
+        xstart = np.min(bboxes[:, 0])
+        ystart = np.min(bboxes[:, 1])
+        xend = np.max(bboxes[:, 2])
+        yend = np.max(bboxes[:, 3])
+        results['img'] = results['img'][ystart: yend + 1, xstart: xend + 1] * \
+                         results['gt_semantic_seg'][ystart: yend + 1, xstart: xend + 1, np.newaxis]
+
+        # assert len(results['ann_info']) == 1
+        # bbox = results['ann_info'][0]['bbox']
+        # ystart, xstart, yend, xend = bbox[1], bbox[0], bbox[1] + bbox[3], bbox[0] + bbox[2]
+        # results['img'] = results['img'][ystart: yend + 1, xstart: xend + 1]
+        results['img_shape'] = results['img'].shape
+        results['ori_shape'] = results['img'].shape
+        return results

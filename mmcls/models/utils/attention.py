@@ -8,7 +8,6 @@ from mmcv.runner.base_module import BaseModule
 
 from .helpers import to_2tuple
 
-
 class WindowMSA(BaseModule):
     """Window based multi-head self-attention (W-MSA) module with relative
     position bias.

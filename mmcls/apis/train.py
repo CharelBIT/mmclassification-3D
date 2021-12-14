@@ -52,6 +52,7 @@ def train_model(model,
                 cfg,
                 distributed=False,
                 validate=False,
+                test=False,
                 timestamp=None,
                 device='cuda',
                 meta=None):
@@ -132,8 +133,8 @@ def train_model(model,
         optimizer_config,
         cfg.checkpoint_config,
         cfg.log_config,
-        cfg.get('momentum_config', None),
-        custom_hooks_config=cfg.get('custom_hooks', None))
+        cfg.get('momentum_config', None),)
+        # custom_hooks_config=cfg.get('custom_hooks', None))
     if distributed:
         runner.register_hook(DistSamplerSeedHook())
 
@@ -152,6 +153,18 @@ def train_model(model,
         eval_hook = DistEvalHook if distributed else EvalHook
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
+    # if test:
+    #     test_dataset = build_dataset(cfg.data.test, dict(test_mode=True))
+    #     test_dataloader = build_dataloader(test_dataset,
+    #            samples_per_gpu=cfg.data.samples_per_gpu,
+    #            workers_per_gpu=cfg.data.workers_per_gpu,
+    #            dist=distributed,
+    #            shuffle=False,
+    #            round_up=True)
+    #     eval_cfg = cfg.get('evaluation', {})
+    #     eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
+    #     eval_hook = DistEvalHook if distributed else EvalHook
+    #     runner.register_hook(eval_hook(test_dataloader, **eval_cfg))
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
     elif cfg.load_from:

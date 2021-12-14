@@ -2,7 +2,7 @@ from numbers import Number
 
 import numpy as np
 import torch
-from sklearn.metrics import average_precision_score
+from sklearn import metrics
 
 def calculate_confusion_matrix(pred, target):
     """Calculate confusion matrix according to the prediction and target.
@@ -254,11 +254,13 @@ def auc(pred_score, target):
         pred_score_np = pred_score
     # pred_score = np.max(pred_score_np, axis=1)
     # score = pred_score_np[target[:, np.newaxis]]
-    score = []
+    # score = []
     # for i in range(pred_score_np.shape[0]):
     #     score.append(pred_score_np[i, target[i]])
-    one_hot = np.zeros(shape=(target.shape[0], target.max() + 1))
-    for i in range(target.shape[0]):
-        one_hot[i, target[i]] = 1
-    return average_precision_score(one_hot, pred_score)
+    # one_hot = np.zeros(shape=(target.shape[0], target.max() + 1))
+    # for i in range(target.shape[0]):
+    #     one_hot[i, target[i]] = 1
+    # return average_precision_score(one_hot, pred_score)
+    fpr, tpr, th = metrics.roc_curve(target, pred_score_np[:, 1])
+    return metrics.auc(fpr, tpr)
 
