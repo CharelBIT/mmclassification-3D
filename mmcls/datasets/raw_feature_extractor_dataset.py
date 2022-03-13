@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from glob import glob
 import imagesize
 import os.path as osp
@@ -61,6 +62,8 @@ class RawFeatureExtractorDataset(BaseDataset):
             img_info['img_info']['height'] = h
             img_info['img_info']['filename'] = img_info['img_info']['file_name']
             img_info['img_prefix'] = img_dir
+            # ATTENTION: FAKE Lable
+            img_info['gt_label'] = np.array(1, dtype=np.int64)
             img_infos.append(img_info)
         return img_infos
 

@@ -197,6 +197,7 @@ log_config = dict(
 checkpoint_config = dict(by_epoch=True, interval=2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = '/gruntdata/workDir/dataset/mmclassifcation_pretrained_model/swin_small_224_b16x64_300e_imagenet_20210615_110219-7f9d988b_adj.pth'
+load_from = '/gruntdata/workDir/dataset/mmclassifcation_pretrained_model/' \
+            'swin_small_224_b16x64_300e_imagenet_20210615_110219-7f9d988b_adj.pth'
 resume_from = None
 workflow = [('train', 1)]
