@@ -92,7 +92,7 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
-    cfg.data.test.test_mode = True
+    # cfg.data.test.test_mode = True
 
     assert args.metrics or args.out, \
         'Please specify at least one of output path and evaluation metrics.'
@@ -105,11 +105,21 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # build the dataloader
-    cfg.data.train['pipeline'] = cfg.data.test['pipeline']
-    train_dataset = build_dataset(cfg.data.train)
-    test_dataset = build_dataset(cfg.data.test)
+    # cfg.data.train['pipeline'] = cfg.data.test['pipeline']
+
+    if isinstance(cfg.data.test, (list, tuple)):
+        test_dataset = []
+        cfg.data.train['pipeline'] = cfg.data.test[0]['pipeline']
+        for i in range(len(cfg.data.test)):
+            cfg.data.test[i].test_mode = True
+            test_dataset.append(build_dataset(cfg.data.test[i]))
+    else:
+        cfg.data.test.test_mode = True
+        cfg.data.train['pipeline'] = cfg.data.test['pipeline']
+        test_dataset = build_dataset(cfg.data.test)
     val_dataset = build_dataset(cfg.data.val)
     # the extra round_up data will be removed during gpu/cpu collect
+    train_dataset = build_dataset(cfg.data.train)
     train_data_loader = build_dataloader(
         train_dataset,
         samples_per_gpu=cfg.data.samples_per_gpu,
@@ -117,14 +127,24 @@ def main():
         dist=distributed,
         shuffle=False,
         round_up=True)
-
-    test_data_loader = build_dataloader(
-        test_dataset,
-        samples_per_gpu=cfg.data.samples_per_gpu,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False,
-        round_up=True)
+    if isinstance(cfg.data.test, (list, tuple)):
+        test_data_loader = []
+        for i in range(len(test_dataset)):
+            test_data_loader.append(build_dataloader(
+                test_dataset[i],
+                samples_per_gpu=cfg.data.samples_per_gpu,
+                workers_per_gpu=cfg.data.workers_per_gpu,
+                dist=distributed,
+                shuffle=False,
+                round_up=True))
+    else:
+        test_data_loader = build_dataloader(
+            test_dataset,
+            samples_per_gpu=cfg.data.samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False,
+            round_up=True)
 
     val_data_loader = build_dataloader(
         val_dataset,
@@ -160,38 +180,64 @@ def main():
                 model = MMDataParallel(init_model, device_ids=[0])
             model.CLASSES = CLASSES
             show_kwargs = {} if args.show_options is None else args.show_options
-            test_outputs = single_gpu_test(model, test_data_loader, args.show, args.show_dir,
-                                      **show_kwargs)
+            if not isinstance(test_data_loader, list):
+                test_outputs = single_gpu_test(model, test_data_loader, args.show, args.show_dir,
+                                          **show_kwargs)
+            else:
+                test_outputs = []
+                for i in range(len(test_data_loader)):
+                    test_outputs.append(
+                        single_gpu_test(model, test_data_loader[i], args.show, args.show_dir,
+                                        **show_kwargs)
+                    )
             val_outputs = single_gpu_test(model, val_data_loader, args.show, args.show_dir,
                                            **show_kwargs)
             train_outputs = single_gpu_test(model, train_data_loader, args.show, args.show_dir,
                                           **show_kwargs)
         else:
-            model = MMDistributedDataParallel(
-                init_model.cuda(),
-                device_ids=[torch.cuda.current_device()],
-                broadcast_buffers=False)
-            test_outputs = multi_gpu_test(model, test_data_loader, args.tmpdir,
-                                     args.gpu_collect)
-            val_outputs = multi_gpu_test(model, val_data_loader, args.tmpdir,
-                                          args.gpu_collect)
-            train_outputs = multi_gpu_test(model, train_data_loader, args.tmpdir,
-                                         args.gpu_collect)
+            raise NotImplementedError
+            # model = MMDistributedDataParallel(
+            #     init_model.cuda(),
+            #     device_ids=[torch.cuda.current_device()],
+            #     broadcast_buffers=False)
+            # test_outputs = multi_gpu_test(model, test_data_loader, args.tmpdir,
+            #                          args.gpu_collect)
+            # val_outputs = multi_gpu_test(model, val_data_loader, args.tmpdir,
+            #                               args.gpu_collect)
+            # train_outputs = multi_gpu_test(model, train_data_loader, args.tmpdir,
+            #                              args.gpu_collect)
         print("[INFO] metrics {}: ".format(model_file))
         rank, _ = get_dist_info()
         if rank == 0:
             results = {}
             if args.metrics:
-                test_eval_results = test_dataset.evaluate(test_outputs, args.metrics,
-                                                args.metric_options)
+                if not isinstance(test_dataset, list):
+                    test_eval_results = test_dataset.evaluate(test_outputs, args.metrics,
+                                                    args.metric_options)
+                else:
+                    test_eval_results = []
+                    for i in range(len(test_dataset)):
+                        test_eval_results.append(
+                            test_dataset[i].evaluate(test_outputs[i], args.metrics,
+                                                  args.metric_options)
+                        )
                 val_eval_results = val_dataset.evaluate(val_outputs, args.metrics,
                                                           args.metric_options)
                 train_eval_results = train_dataset.evaluate(train_outputs, args.metrics,
                                                         args.metric_options)
-                keys = list(test_eval_results.keys())
-                for key in keys:
-                    test_eval_results['test_' + key] = test_eval_results[key]
-                    del test_eval_results[key]
+
+
+                if not isinstance(test_eval_results, list):
+                    keys = list(test_eval_results.keys())
+                    for key in keys:
+                        test_eval_results['test_' + key] = test_eval_results[key]
+                        del test_eval_results[key]
+                else:
+                    for i in range(len(test_eval_results)):
+                        keys = list(test_eval_results[i].keys())
+                        for key in keys:
+                            test_eval_results[i][f'test_{i}' + key] = test_eval_results[i][key]
+                            del test_eval_results[i][key]
 
                 keys = list(val_eval_results.keys())
                 for key in keys:
@@ -202,21 +248,21 @@ def main():
                 for key in keys:
                     train_eval_results['train_' + key] = train_eval_results[key]
                     del train_eval_results[key]
-                # for key, val in test_eval_results.items():
-                #     test_eval_results['test_' + key] = val
-                #     del test_eval_results[key]
-                # for key, val in val_eval_results.items():
-                #     val_eval_results['val_' + key] = val
-                #     del val_eval_results[key]
-
-                results.update(test_eval_results)
+                if not isinstance(test_eval_results, list):
+                    results.update(test_eval_results)
+                else:
+                    for i in range(len(test_eval_results)):
+                        results.update(test_eval_results[i])
                 results.update(val_eval_results)
-                for k, v in test_eval_results.items():
-                    try:
-                        result_df.loc[model_file.split('/')[-1].split('.')[0], k] = v
-                        print(f'\n{k} : {v:.2f}')
-                    except:
-                        continue
+                if not isinstance(test_eval_results, list):
+                    test_eval_results = [test_eval_results]
+                for i in range(len(test_eval_results)):
+                    for k, v in test_eval_results[i].items():
+                        try:
+                            result_df.loc[model_file.split('/')[-1].split('.')[0], k] = v
+                            print(f'\n{k} : {v:.2f}')
+                        except:
+                            continue
                 for k, v in val_eval_results.items():
                     try:
                         result_df.loc[model_file.split('/')[-1].split('.')[0], k] = v
