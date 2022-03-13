@@ -14,10 +14,12 @@ from .general_medical_dataset import GeneralMedicalDataset
 from .general_medical_dataset_2d import GeneralMedicalDataset2D
 from .continous_slice_dataset import ContinousSliceDataset
 from .continous_slice_dataset_mask import ContinousSliceMaskDataset
+from .raw_feature_extractor_dataset import RawFeatureExtractorDataset
 __all__ = [
     'BaseDataset', 'ImageNet', 'CIFAR10', 'CIFAR100', 'MNIST', 'FashionMNIST',
     'VOC', 'MultiLabelDataset', 'build_dataloader', 'build_dataset', 'Compose',
     'DistributedSampler', 'ConcatDataset', 'RepeatDataset', 'GeneralMedicalDataset2D'
     'ClassBalancedDataset', 'DATASETS', 'PIPELINES', 'Hie_Dataset', 'WUHANZL_ProstateDataset',
-    'GeneralMedicalDataset', 'ContinousSliceDataset', 'ContinousSliceMaskDataset'
+    'GeneralMedicalDataset', 'ContinousSliceDataset', 'ContinousSliceMaskDataset',
+    'RawFeatureExtractorDataset'
 ]

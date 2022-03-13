@@ -22,6 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='mmcls test model')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
+    parser.add_argument('--save-path', help='checkpoint file')
     parser.add_argument(
         '--options',
         nargs='+',
@@ -56,19 +57,22 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
-    cfg.data.test.test_mode = True
+    if hasattr(cfg.data, 'test'):
+        cfg.data.test.test_mode = True
 
     try:
         cfg.data.train.pipeline = cfg.feature_extract_pipeline
-        cfg.data.test.pipeline = cfg.feature_extract_pipeline
+        if hasattr(cfg.data, 'test'):
+            cfg.data.test.pipeline = cfg.feature_extract_pipeline
     except:
-        print("[WARNING] 'feature_extract_pipline' not in cfg file"
+        print("[WARNING] 'feature_extract_pipline' not in cfg file "
               "using test_pipline")
         for operation in cfg.test_pipeline:
             if operation['type'] == 'ToTensor' or operation['type'] == 'Collect':
                 operation['keys'] = ['img', 'gt_label']
         cfg.data.train.pipeline = cfg.test_pipeline
-        cfg.data.test.pipeline = cfg.test_pipeline
+        if hasattr(cfg.data, 'test'):
+            cfg.data.test.pipeline = cfg.test_pipeline
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
@@ -81,7 +85,9 @@ def main():
     # dataset = build_dataset(cfg.data.test)
     # the extra round_up data will be removed during gpu/cpu collect
     train_dataset = build_dataset(cfg.data.train)
-    test_dataset = build_dataset(cfg.data.test)
+    test_dataset = None
+    if hasattr(cfg.data, 'test'):
+        test_dataset = build_dataset(cfg.data.test)
     # build the model and load checkpoint
     model = build_classifier(cfg.model)
     fp16_cfg = cfg.get('fp16', None)
@@ -101,21 +107,22 @@ def main():
             feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
             result = dict(file_name=d['img_metas'].data['filename'],
                           features=feats,
-                          gt_label=d['gt_label'].cpu().item(),
+                          gt_label=d['gt_label'].item(),
                           train=1)
             results.append(result)
-    pbar = tqdm(test_dataset)
-    for i, d in enumerate(pbar):
-        # if i > test_count:
-        #     break
-        pbar.set_description("Test Dataset")
-        with torch.no_grad():
-            feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
-            result = dict(file_name=d['img_metas'].data['filename'],
-                          features=feats,
-                          gt_label=d['gt_label'].cpu().item(),
-                          train=0)
-            results.append(result)
+    if test_dataset is not None:
+        pbar = tqdm(test_dataset)
+        for i, d in enumerate(pbar):
+            # if i > test_count:
+            #     break
+            pbar.set_description("Test Dataset")
+            with torch.no_grad():
+                feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
+                result = dict(file_name=d['img_metas'].data['filename'],
+                              features=feats,
+                              gt_label=d['gt_label'].cpu().item(),
+                              train=0)
+                results.append(result)
     df = pd.DataFrame()
     for i, result in enumerate(results):
         feats = []
@@ -129,8 +136,8 @@ def main():
         df.loc[i, 'Label'] = int(result['gt_label'])
         for j, f in enumerate(feats):
             df.loc[i, args.feature_name + '_' + str(j)] = f
-    if not os.path.exists('feats'):
-        os.makedirs('feats')
-    df.to_csv('feats/{}.csv'.format(args.config.split('/')[-1][:-3]))
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+    df.to_csv('{}/{}.csv'.format(args.save_path, args.config.split('/')[-1][:-3]))
 if __name__ == '__main__':
     main()

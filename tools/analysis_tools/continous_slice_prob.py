@@ -156,10 +156,11 @@ def plot_calibration_curve(est, y_test, prob_pos, name, bins=4, dataset=''):
 
 def convert_df(patient_infos_per_dataset: list):
     df = pd.DataFrame()
-    for patient_infos in patient_infos_per_dataset:
+    for dataset_id, patient_infos in enumerate(patient_infos_per_dataset):
         for patient_id in patient_infos:
             df.loc[patient_id, 'Label'] = patient_infos[patient_id]['gt_label']
             df.loc[patient_id, 'pred'] = patient_infos[patient_id]['pred'][1]
+            df.loc[patient_id, 'dataset_id'] = dataset_id
     df.index.name = 'patient_id'
     return df
 
@@ -236,7 +237,7 @@ def main():
     plot_figs(val_pred_per_patient, val_gt_per_patient, 'val')
     plot_figs(test_pred_per_patient, test_gt_per_patient, 'test')
     plot_figs(train_pred_per_patient, train_gt_per_patient, 'train')
-    df = convert_df([test_patient_infos])
+    df = convert_df([train_patient_infos, val_patient_infos, test_patient_infos])
     if args is not None and not os.path.exists(os.path.abspath(os.path.dirname(args.out))):
         os.makedirs(os.path.abspath(os.path.dirname(args.out)))
     if args.out:
