@@ -1,3 +1,4 @@
+import copy
 import inspect
 import math
 import random
@@ -7,7 +8,8 @@ import cv2
 from mmcls.utils import cv2_util
 import mmcv
 import numpy as np
-
+import os
+import time
 from ..builder import PIPELINES
 from .compose import Compose
 
@@ -1066,19 +1068,82 @@ class Albu(object):
 
 @PIPELINES.register_module()
 class CropWithAnnotation(object):
-    def __init__(self):
-        pass
+    def __init__(self, expansion_type=None, expansion_kwargs={}, debug=None):
+        self.expansion_type = expansion_type
+        self.expansion_kwargs = expansion_kwargs
+        self.debug = debug
+
     def __call__(self, results):
         if 'ann_info' not in results:
             print('[WARNING] \'ann_info\' not in results')
             return results
         assert len(results['ann_info']) == 1
         bbox = results['ann_info'][0]['bbox']
-        ystart, xstart, yend, xend = bbox[1], bbox[0], bbox[1] + bbox[3], bbox[0] + bbox[2]
+        ystart, xstart, yend, xend = bbox[1], bbox[0], bbox[1] + bbox[3] - 1, bbox[0] + bbox[2] - 1
+
+        if self.expansion_type is not None:
+            ystart, xstart, yend, xend = self._expansion([ystart, xstart, yend,xend],
+                                                         self.expansion_type,
+                                                         self.expansion_kwargs,
+                                                         results['img'].shape[:2])
+        if self.debug is not None:
+            image = copy.deepcopy(results['img'])
+            cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[0] + bbox[2] - 1, bbox[1] + bbox[3] - 1), color=[0, 0, 255],
+                          thickness=2)
+            cv2.rectangle(image, (xstart, ystart), (xend, yend), color=[0, 255, 0],
+                          thickness=1)
+            if not os.path.exists(self.debug):
+                os.makedirs(self.debug)
+            timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+            cv2.imwrite(os.path.join(self.debug, results['img_info']['filename'].split('.')[0] + f'_{timestamp}.png'), image)
+
         results['img'] = results['img'][ystart: yend + 1, xstart: xend + 1]
         results['img_shape'] = results['img'].shape
         results['ori_shape'] = results['img'].shape
         return results
+    def _expansion(self, bbox, expansion_type, expansion_kwargs, image_shape):
+        ystart, xstart, yend, xend = bbox
+        H, W = yend - ystart + 1, xend - xstart + 1
+        if expansion_type.lower() == 'statistic':
+            newH = (yend - ystart) + 1 + expansion_kwargs['expansion_val'] * 2
+            newW = (xend - xstart) + 1 + expansion_kwargs['expansion_val'] * 2
+        elif expansion_type.lower() == 'ratio':
+            newH = ((yend - ystart) + 1) * (1 + expansion_kwargs['expansion_val'] * 2)
+            newW = ((xend - xstart) + 1) * (1 + expansion_kwargs['expansion_val'] * 2)
+        else:
+            raise NotImplementedError
+
+        if any([
+            image_shape[0] <= newH, image_shape[1] <= newW
+        ]):
+            raise ValueError
+        if expansion_kwargs.get('shift_aug', False) == False:
+            ystart = max(0, ystart - (newH - H) // 2)
+            xstart = max(0, xstart - (newW - W) // 2)
+
+            yend = min(image_shape[0] - 1, ystart + newH - 1)
+            xend = min(image_shape[1] - 1, xstart + newW - 1)
+
+            ystart = yend - newH + 1
+            xstart = xend - newW + 1
+        else:
+            ymax = min(image_shape[0] - 1, ystart + newH - 1)
+            xmax = min(image_shape[1] - 1, xstart + newW - 1)
+
+            ymax = ymax - newH + 1
+            xmax = xmax - newW + 1
+
+            ymin = max(0, yend - newH + 1)
+            xmin = max(0, xend - newW + 1)
+            ystart = random.choice(range(ymin, ymax + 1))
+            xstart = random.choice(range(xmin, xmax + 1))
+
+            yend = ystart + newH - 1
+            xend = xstart + newW - 1
+
+        return ystart, xstart, yend, xend
+
+
 @PIPELINES.register_module()
 class CropWithMaskAnnotation(object):
     def __init__(self):

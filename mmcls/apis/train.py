@@ -149,6 +149,7 @@ def train_model(model,
             shuffle=False,
             round_up=True)
         eval_cfg = cfg.get('evaluation', {})
+        # if 'by_epoch' not in eval_cfg:
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
         eval_hook = DistEvalHook if distributed else EvalHook
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
