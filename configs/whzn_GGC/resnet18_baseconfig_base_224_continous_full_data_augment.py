@@ -64,7 +64,7 @@ train_pipeline = [
     dict(type='CropWithAnnotation',
          expansion_type='statistic',
          expansion_kwargs={'expansion_val': 5, 'shift_aug': True}),
-    dict(type='Resize', size=(64, 64)),
+    dict(type='Resize', size=(224, 224)),
     dict(type='RandomFlip', flip_prob=0.5, direction='horizontal'),
     dict(
         type='RandAugment',
@@ -91,24 +91,25 @@ test_pipeline = [
     dict(type='CropWithAnnotation',
          expansion_type='statistic',
          expansion_kwargs={'expansion_val': 5, 'shift_aug': False},
+         # debug='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/CropWithAnnotation'
          ),
-    dict(type='Resize', size=(64, 64)),
+    dict(type='Resize', size=(224, 224)),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='Collect', keys=['img'])
 ]
 data = dict(
     samples_per_gpu=64,
-    workers_per_gpu=8,
+    workers_per_gpu=64,
     train=dict(
         type='RepeatDataset',
         times=10,
         dataset=dict(
-        type=dataset_type,
-        img_dir='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/image',
-        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/annotation/instance_all.json',
-        split='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/train_0.txt',
-        pipeline=train_pipeline,
+            type=dataset_type,
+            img_dir='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/image',
+            ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/annotation/instance_all.json',
+            split='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/train_0.txt',
+            pipeline=train_pipeline,
         )),
     val=dict(
         type=dataset_type,
@@ -116,10 +117,7 @@ data = dict(
         ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/coco/annotation/instance_all.json',
         split='/gruntdata1/charelchen.cj/workDir/dataset/whzn_lung/test_0.txt',
         pipeline=test_pipeline,
-        ),
-    test=[]
-)
-
+        ),)
     # test=dict(
     #     # replace `data/val` with `data/test` for standard test
     #     type=dataset_type,
@@ -128,8 +126,7 @@ data = dict(
     #     split='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_lung/test_split_130.txt',
     #     pipeline=test_pipeline,
     #     ))
-evaluation = dict(interval=1,
-                  metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
+evaluation = dict(interval=1, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
 
 # norm_cfg = dict(type='BN3d', requires_grad=True)
 # conv_cfg = dict(type='Conv3d')
@@ -164,20 +161,26 @@ model = dict(
         type='ResNet',
         depth=18,
         num_stages=4,
-        base_channels=32,
-        stem_channels=32,
         # frozen_stages=3,
-        strides=(1, 2, 2, 1),
         out_indices=(3, ),
         style='pytorch'),
     neck=dict(type='GlobalAveragePooling'),
     head=dict(
         type='LinearClsHead',
         num_classes=2,
-        in_channels=256,
+        in_channels=512,
         loss=dict(type='CrossEntropyLoss', loss_weight=1.0),
         topk=(1,),
     ))
+
+paramwise_cfg = dict(
+    norm_decay_mult=0.0,
+    bias_decay_mult=0.0,
+    custom_keys={
+        '.absolute_pos_embed': dict(decay_mult=0.0),
+        '.relative_position_bias_table': dict(decay_mult=0.0)
+    })
+
 # for batch in each gpu is 128, 8 gpu
 # lr = 5e-4 * 128 * 8 / 512 = 0.001
 optimizer = dict(
@@ -186,7 +189,7 @@ optimizer = dict(
     weight_decay=0.05,
     eps=1e-8,
     betas=(0.9, 0.999),
-    )
+    paramwise_cfg=paramwise_cfg)
 optimizer_config = dict(grad_clip=dict(max_norm=5.0))
 
 # learning policy
@@ -211,7 +214,7 @@ log_config = dict(
 checkpoint_config = dict(by_epoch=False, interval=20)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = None
+load_from = '/gruntdata1/charelchen.cj/workDir/dataset/mmclassifcation_pretrained_model/resnet18_batch256_imagenet_20200708-34ab8f90.pth'
 resume_from = None
 workflow = [('train', 1)]
-work_dir = 'work_dirs/whzn_GGC_resnet18_baseconfig_base_64_continous_data_full_augment'
+work_dir = 'work_dirs/whzn_GGC_resnet18_baseconfig_base_224_continous_full_data_augment'

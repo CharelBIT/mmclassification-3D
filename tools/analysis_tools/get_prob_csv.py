@@ -51,58 +51,75 @@ def get_model_prob(model, data_loader):
             results.extend(result)
     return results
 
-def netBenefit(y_true, y_prob, threshold):
-    y_pred = np.zeros(y_prob.shape)
-    y_pred[np.where(y_prob > threshold)] = 1
-    num = y_true.size
-    tp_num = len(np.intersect1d(np.where(y_true == 1), np.where(y_pred == 1)))
-    fp_num = len(np.intersect1d(np.where(y_true == 0), np.where(y_pred == 1)))
-
-    tpr = tp_num / num
-    fpr = fp_num / num
-
-    NB = tpr - fpr * threshold / (1 - threshold)
-    return NB
-
 def main():
     args = parse_args()
     cfg = mmcv.Config.fromfile(args.config)
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
-    cfg.data.test.test_mode = True
+    # cfg.data.test.test_mode = True
+    if hasattr(cfg.data, 'test'):
+        if not isinstance(cfg.data.test, (list, tuple)):
+            cfg.data.test = [cfg.data.test]
+    else:
+        cfg.data.test = []
+
     if args.launcher == 'none':
         distributed = False
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
-    # cfg.data.train['pipeline'] = cfg.data.test['pipeline']
-    train_dataset = build_dataset(cfg.data.train)
-    test_dataset = build_dataset(cfg.data.test)
-    val_dataset = build_dataset(cfg.data.val)
-    train_data_loader = build_dataloader(
-        train_dataset,
-        samples_per_gpu=cfg.data.samples_per_gpu,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False,
-        round_up=True)
-    test_data_loader = build_dataloader(
-        test_dataset,
-        samples_per_gpu=cfg.data.samples_per_gpu,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False,
-        round_up=True)
 
-    val_data_loader = build_dataloader(
-        val_dataset,
-        samples_per_gpu=cfg.data.samples_per_gpu,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False,
-        round_up=True)
+    train_data_loader = None
+    val_data_loader = None
+    if hasattr(cfg.data, 'train'):
+        if cfg.data.train['type'] == 'RepeatDataset':
+            cfg.data.train = cfg.data.train['dataset']
+        cfg.data.train['pipeline'] = cfg.test_pipeline
+        cfg.data.train.test_mode = True
+        train_dataset = build_dataset(cfg.data.train)
+        train_data_loader = build_dataloader(
+            train_dataset,
+            samples_per_gpu=cfg.data.samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False,
+            round_up=True)
+
+    if hasattr(cfg.data, 'val'):
+        cfg.data.val['pipeline'] = cfg.test_pipeline
+        cfg.data.val.test_mode = True
+        val_dataset = build_dataset(cfg.data.val)
+        val_data_loader = build_dataloader(
+            val_dataset,
+            samples_per_gpu=cfg.data.samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False,
+            round_up=True)
+    test_data_loaders = []
+    for test_config in cfg.data.test:
+        test_config['pipeline'] = cfg.test_pipeline
+        test_config['test_mode'] = True
+        test_dataset = build_dataset(test_config)
+        test_data_loader = build_dataloader(
+            test_dataset,
+            samples_per_gpu=cfg.data.samples_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False,
+            round_up=True)
+        test_data_loaders.append(test_data_loader)
+
+    # val_data_loader = build_dataloader(
+    #     val_dataset,
+    #     samples_per_gpu=cfg.data.samples_per_gpu,
+    #     workers_per_gpu=cfg.data.workers_per_gpu,
+    #     dist=distributed,
+    #     shuffle=False,
+    #     round_up=True)
     init_model = build_classifier(cfg.model)
+    df = pd.DataFrame()
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(init_model)
@@ -121,22 +138,44 @@ def main():
         else:
             model = MMDataParallel(init_model, device_ids=[0])
         model.CLASSES = CLASSES
-        val_results = get_model_prob(model, val_data_loader)
-        test_results = get_model_prob(model, test_data_loader)
-        train_results = get_model_prob(model, train_data_loader)
+
+        if train_data_loader is not None:
+            train_results = get_model_prob(model, train_data_loader)
+            for train_result, data_info in zip(train_results,
+                                               train_data_loader.dataset.data_infos):
+                df.loc[data_info['img_info']['patient_id'], 'score'] = train_result[1]
+                df.loc[data_info['img_info']['patient_id'], 'data_priority'] = 0
+                df.loc[data_info['img_info']['patient_id'], 'Label'] = int(data_info['gt_label'])
+
+        if val_data_loader is not None:
+            val_results = get_model_prob(model, val_data_loader)
+            for val_result, data_info in zip(val_results,
+                                             val_data_loader.dataset.data_infos):
+                df.loc[data_info['img_info']['patient_id'], 'score'] = val_result[1]
+                df.loc[data_info['img_info']['patient_id'], 'data_priority'] = 1
+                df.loc[data_info['img_info']['patient_id'], 'Label'] = int(data_info['gt_label'])
+
+        for i, test_data_loader in enumerate(test_data_loaders):
+            test_results = get_model_prob(model, test_data_loader)
+            for test_result, data_info in zip(test_results,
+                                             test_data_loader.dataset.data_infos):
+                df.loc[data_info['img_info']['patient_id'], 'score'] = test_result[1]
+                df.loc[data_info['img_info']['patient_id'], 'data_priority'] = i + 2
+                df.loc[data_info['img_info']['patient_id'], 'Label'] = int(data_info['gt_label'])
     else:
         # val_results = None
         # test_results = None
         raise NotImplementedError
-    df = pd.DataFrame()
-    for train_result, data_info in zip(train_results, train_dataset.data_infos):
-        df.loc[data_info['patient_id'], 'score'] = train_result[1]
-        df.loc[data_info['patient_id'], 'train_sample'] = 1
-        df.loc[data_info['patient_id'], 'Label'] = int(data_info['gt_label'])
-    for val_result, data_info in zip(val_results, val_dataset.data_infos):
-        df.loc[data_info['patient_id'], 'score'] = val_result[1]
-        df.loc[data_info['patient_id'], 'train_sample'] = 0
-        df.loc[data_info['patient_id'], 'Label'] = int(data_info['gt_label'])
+
+    # for train_result, data_info in zip(train_results,
+    #                                    train_data_loader.dataset.data_infos):
+    #     df.loc[data_info['patient_id'], 'score'] = train_result[1]
+    #     df.loc[data_info['patient_id'], 'data_priority'] = 1
+    #     df.loc[data_info['patient_id'], 'Label'] = int(data_info['gt_label'])
+    # for val_result, data_info in zip(val_results, val_dataset.data_infos):
+    #     df.loc[data_info['patient_id'], 'score'] = val_result[1]
+    #     df.loc[data_info['patient_id'], 'train_sample'] = 0
+    #     df.loc[data_info['patient_id'], 'Label'] = int(data_info['gt_label'])
     # for test_result, data_info in zip(test_results, test_dataset.data_infos):
     #     df.loc[data_info['patient_id'], 'score'] = test_result[1]
     #     df.loc[data_info['patient_id'], 'train_sample'] = -1

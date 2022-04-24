@@ -61,6 +61,13 @@ class BasicBlock(nn.Module):
         self.norm2_name, norm2 = build_norm_layer(
             norm_cfg, out_channels, postfix=2)
 
+        if self.style == 'pytorch':
+            self.conv1_stride = 1
+            self.conv2_stride = stride
+        else:
+            self.conv1_stride = stride
+            self.conv2_stride = 1
+
         self.conv1 = build_conv_layer(
             conv_cfg,
             in_channels,

@@ -94,6 +94,7 @@ checkpoint_config = dict(by_epoch=True, interval=2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
-resume_from = None
+resume_from = '/gruntdata1/charelchen.cj/workDir/project/mmclassification-3D/work_dir/' \
+              'whtj_stroke_resnetV1d18_baseconfig_pretraineds/latest.pth'
 work_dir = 'work_dir/whtj_stroke_resnetV1d18_baseconfig_pretraineds'
 workflow = [('train', 1)]

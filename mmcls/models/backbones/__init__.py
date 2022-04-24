@@ -15,6 +15,7 @@ from .swin_transformer import SwinTransformer
 from .vgg import VGG
 from .vision_transformer import VisionTransformer
 from .resnet_hie import ResNetHIE, ResNetV1dHIE
+from .resnext3D import ResNeXtV1dHIE
 __all__ = [
     'LeNet5', 'AlexNet', 'VGG', 'RegNet', 'ResNet', 'ResNeXt', 'ResNetV1d',
     'ResNeSt', 'ResNet_CIFAR', 'SEResNet', 'SEResNeXt', 'ShuffleNetV1',
