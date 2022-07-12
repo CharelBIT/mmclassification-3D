@@ -109,8 +109,9 @@ class Hie_Dataset(BaseDataset):
             filenames = []
             for mode in self.modes:
                 filenames.append(os.path.join(self.data_prefix, filename, mode + '.nii.gz'))
-            info['patient_id'] = filename
-            info['img_info'] = {'filename': filenames}
+            # info['patient_id'] = filename
+            info['img_info'] = {'filename': filenames,
+                                'patient_id': filename}
             info['gt_label'] = np.array(gt_label, dtype=np.int64)
             data_infos.append(info)
         return data_infos

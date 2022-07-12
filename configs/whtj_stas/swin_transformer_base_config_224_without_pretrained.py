@@ -177,7 +177,7 @@ lr_config = dict(
     min_lr_ratio=1e-2,
     warmup='linear',
     warmup_ratio=1e-3,
-    warmup_iters=20 * 1252,
+    warmup_iters=5000,
     warmup_by_epoch=False)
 
 runner = dict(type='EpochBasedRunner', max_epochs=800)
@@ -192,10 +192,6 @@ log_config = dict(
 checkpoint_config = dict(by_epoch=True, interval=2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = '/gruntdata/workDir/project/mmclassification-3D/work_dirs/' \
-            'swin_transformer_base_config_224/' \
-            'latest.pth'
-resume_from = '/gruntdata/workDir/project/mmclassification-3D/work_dirs/' \
-            'swin_transformer_base_config_224/' \
-            'latest.pth'
+load_from = None
+resume_from = None
 workflow = [('train', 1)]

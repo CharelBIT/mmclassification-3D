@@ -109,7 +109,10 @@ def main():
 
     if isinstance(cfg.data.test, (list, tuple)):
         test_dataset = []
-        cfg.data.train['pipeline'] = cfg.data.test[0]['pipeline']
+        if len(cfg.data.test) == 0:
+            cfg.data.train['pipeline'] = cfg.test_pipeline
+        else:
+            cfg.data.train['pipeline'] = cfg.data.test[0]['pipeline']
         for i in range(len(cfg.data.test)):
             cfg.data.test[i].test_mode = True
             test_dataset.append(build_dataset(cfg.data.test[i]))

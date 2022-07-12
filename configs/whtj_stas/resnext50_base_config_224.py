@@ -101,24 +101,24 @@ data = dict(
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,
-        img_dir='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/image',
-        ann_file='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
-        split='/gruntdata/workDir/dataset/whtj_lung/train_stas.txt',
+        img_dir='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/image',
+        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
+        split='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/train_stas.txt',
         pipeline=train_pipeline,
         ),
     val=dict(
         type=dataset_type,
-        img_dir='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/image',
-        ann_file='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
-        split='/gruntdata/workDir/dataset/whtj_lung/test_stas.txt',
+        img_dir='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/image',
+        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
+        split='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/test_stas.txt',
         pipeline=test_pipeline,
         ),
     test=dict(
         # replace `data/val` with `data/test` for standard test
         type=dataset_type,
-        img_dir='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/image',
-        ann_file='/gruntdata/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
-        split='/gruntdata/workDir/dataset/whtj_lung/test_stas.txt',
+        img_dir='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/image',
+        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/2dSlice_continous/annotation/instance_merge.json',
+        split='/gruntdata1/charelchen.cj/workDir/dataset/whtj_lung/test_stas.txt',
         pipeline=test_pipeline,
         ))
 evaluation = dict(interval=1, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
@@ -131,33 +131,34 @@ num_classes = 2
 model = dict(
     type='ImageClassifier',
     backbone=dict(
-        type='SwinTransformer', arch='small', img_size=224,
-        drop_path_rate=0.3),
-    neck=dict(type='GlobalAveragePooling', dim=1),
+        type='ResNeXt',
+        depth=50,
+        num_stages=4,
+        out_indices=(3,),
+        groups=32,
+        width_per_group=4,
+        style='pytorch'),
+    neck=dict(type='GlobalAveragePooling'),
     head=dict(
         type='LinearClsHead',
         num_classes=num_classes,
-        in_channels=768,
+        in_channels=2048,
         init_cfg=None,  # suppress the default init_cfg of LinearClsHead.
         loss=dict(
             type='LabelSmoothLoss', label_smooth_val=0.1, mode='original'),
         cal_acc=False),
-    init_cfg=[
-        dict(type='TruncNormal', layer='Linear', std=0.02, bias=0.),
-        dict(type='Constant', layer='LayerNorm', val=1., bias=0.)
-    ],
     train_cfg=dict(augments=[
         dict(type='BatchMixup', alpha=0.8, num_classes=num_classes, prob=0.5),
         dict(type='BatchCutMix', alpha=1.0, num_classes=num_classes, prob=0.5)
     ]))
 
-paramwise_cfg = dict(
-    norm_decay_mult=0.0,
-    bias_decay_mult=0.0,
-    custom_keys={
-        '.absolute_pos_embed': dict(decay_mult=0.0),
-        '.relative_position_bias_table': dict(decay_mult=0.0)
-    })
+# paramwise_cfg = dict(
+#     norm_decay_mult=0.0,
+#     bias_decay_mult=0.0,
+#     custom_keys={
+#         '.absolute_pos_embed': dict(decay_mult=0.0),
+#         '.relative_position_bias_table': dict(decay_mult=0.0)
+#     })
 
 # for batch in each gpu is 128, 8 gpu
 # lr = 5e-4 * 128 * 8 / 512 = 0.001
@@ -167,7 +168,7 @@ optimizer = dict(
     weight_decay=0.05,
     eps=1e-8,
     betas=(0.9, 0.999),
-    paramwise_cfg=paramwise_cfg)
+    paramwise_cfg={})
 optimizer_config = dict(grad_clip=dict(max_norm=5.0))
 
 # learning policy
@@ -177,10 +178,10 @@ lr_config = dict(
     min_lr_ratio=1e-2,
     warmup='linear',
     warmup_ratio=1e-3,
-    warmup_iters=20 * 1252,
+    warmup_iters=300,
     warmup_by_epoch=False)
 
-runner = dict(type='EpochBasedRunner', max_epochs=800)
+runner = dict(type='EpochBasedRunner', max_epochs=200)
 
 log_config = dict(
     interval=10,
@@ -192,10 +193,7 @@ log_config = dict(
 checkpoint_config = dict(by_epoch=True, interval=2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = '/gruntdata/workDir/project/mmclassification-3D/work_dirs/' \
-            'swin_transformer_base_config_224/' \
-            'latest.pth'
-resume_from = '/gruntdata/workDir/project/mmclassification-3D/work_dirs/' \
-            'swin_transformer_base_config_224/' \
-            'latest.pth'
+load_from = '/gruntdata1/charelchen.cj/workDir/dataset/mmclassification_pretrained_model/' \
+            'resnext50_32x4d_b32x8_imagenet_20210429-56066e27.pth'
+resume_from = None
 workflow = [('train', 1)]

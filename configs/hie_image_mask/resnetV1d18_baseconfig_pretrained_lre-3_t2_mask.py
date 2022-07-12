@@ -35,34 +35,44 @@ data = dict(
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,
-        img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
-        ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
+        # img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+        #             'hie_niigz_mask_seg_0.5x0.5x0.5',
+        # ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+        #             'hie_niigz_mask_seg_0.5x0.5x0.5',
+        img_dir='/gruntdata/workDir/dataset/hie/'
+                  'ertonghos_nifty_data_0.5x0.5x0.5',
+        ann_dir='/gruntdata/workDir/dataset/hie/'
+                  'ertonghos_nifty_data_0.5x0.5x0.5',
         mode='t2',
-        split='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/t1_zw_fse_train.txt',
+        # split='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/t1_zw_fse_train.txt',
+        split='/gruntdata/workDir/dataset/hie/ertong_list.txt',
         pipeline=train_pipeline,
         ),
     val=dict(
         type=dataset_type,
-        img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
-        ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
+        # img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+        #             'hie_niigz_mask_seg_0.5x0.5x0.5',
+        # ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+        #             'hie_niigz_mask_seg_0.5x0.5x0.5',
+        img_dir='/gruntdata/workDir/dataset/hie/'
+                  'ertonghos_nifty_data_0.5x0.5x0.5',
+        ann_dir='/gruntdata/workDir/dataset/hie/'
+                  'ertonghos_nifty_data_0.5x0.5x0.5',
         mode='t2',
-        split='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/t1_zw_fse_val.txt',
+        split='/gruntdata/workDir/dataset/hie/ertong_list.txt',
         pipeline=test_pipeline,
         ),
-    test=dict(
-        # replace `data/val` with `data/test` for standard test
-        type=dataset_type,
-        img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
-        ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
-                    'hie_niigz_mask_seg_0.5x0.5x0.5',
-        mode='t2',
-        split='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/t1_zw_fse_val.txt',
-        pipeline=test_pipeline,))
+    # test=dict(
+    #     # replace `data/val` with `data/test` for standard test
+    #     type=dataset_type,
+    #     img_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+    #                 'extend_validation_nifty_0.5x0.5x0.5',
+    #     ann_dir='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/'
+    #                 'extend_validation_nifty_0.5x0.5x0.5',
+    #     mode='t1_zw',
+    #     split='/opt/data/private/project/charelchen.cj/workDir/dataset/hie/extend_datalist.txt',
+    #     pipeline=test_pipeline,))
+    test=[])
 evaluation = dict(interval=2, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
 
 
