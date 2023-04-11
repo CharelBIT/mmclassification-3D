@@ -20,6 +20,7 @@ from .transforms import CropWithAnnotation
 from .transforms import CropWithMaskAnnotation
 from .transforms3D import RandomFlipMedical
 from .transforms3D import CentralCropMedical
+from .transforms import ResizeEdge
 __all__ = [
     'Compose', 'to_tensor', 'ToTensor', 'ImageToTensor', 'ToPIL', 'ToNumpy',
     'Transpose', 'Collect', 'LoadImageFromFile', 'Resize', 'CenterCrop',
@@ -31,5 +32,5 @@ __all__ = [
     "ResampleMedicalImage", "RandomCropMedical", "ExtractDataFromObj",
     "NormalizeMedical", "ConcatImage", "CropMedicalWithAnnotations"
      "IgnoreBlackArea", "RandomCropMedicalWithForeground", 'LoadImageFromNIIFile', 'CropWithAnnotation',
-    'RandomFlipMedical', 'CentralCropMedical', 'CropWithMaskAnnotation'
+    'RandomFlipMedical', 'CentralCropMedical', 'CropWithMaskAnnotation', 'ResizeEdge'
 ]

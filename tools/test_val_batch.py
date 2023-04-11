@@ -106,7 +106,8 @@ def main():
 
     # build the dataloader
     # cfg.data.train['pipeline'] = cfg.data.test['pipeline']
-
+    if cfg.data.train['type'] == 'RepeatDataset':
+        cfg.data.train = cfg.data.train['dataset']
     if isinstance(cfg.data.test, (list, tuple)):
         test_dataset = []
         if len(cfg.data.test) == 0:

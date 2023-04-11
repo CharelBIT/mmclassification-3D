@@ -31,17 +31,24 @@ data = dict(
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,
-        data_prefix='/gruntdata1/charelchen.cj/workDir/dataset/whtj_stroke/CT_nifty_data',
-        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whtj_stroke/train_0.txt',
+        data_prefix='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/CT_nifty_data',
+        ann_file='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/train_ct_0.txt',
         pipeline=train_pipeline,
         modes=['image']),
     val=dict(
         type=dataset_type,
-        data_prefix='/gruntdata1/charelchen.cj/workDir/dataset/whtj_stroke/CT_nifty_data',
-        ann_file='/gruntdata1/charelchen.cj/workDir/dataset/whtj_stroke/test_0.txt',
+        data_prefix='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/CT_nifty_data',
+        ann_file='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/test_ct_0.txt',
         pipeline=test_pipeline,
         modes=['image']),
-    test=[]
+    test=[
+        dict(
+            type=dataset_type,
+            data_prefix='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/CTpredict_ex_CT_extract',
+            ann_file='/opt/data/private/project/charelchen.cj/workDir/dataset/whtj_stroke/extendlist.txt',
+            pipeline=test_pipeline,
+            modes=['image'])
+    ]
 )
 evaluation = dict(interval=2, metric=['accuracy', 'precision', 'recall', 'f1_score', 'support', 'auc'])
 
@@ -79,11 +86,33 @@ model = dict(
         topk=(1,),
     ))
 
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
-optimizer_config = dict(grad_clip=None)
+paramwise_cfg = dict(
+    norm_decay_mult=0.0,
+    bias_decay_mult=0.0,
+    custom_keys={
+        '.absolute_pos_embed': dict(decay_mult=0.0),
+        '.relative_position_bias_table': dict(decay_mult=0.0)
+    })
+optimizer = dict(
+    type='AdamW',
+    lr=5e-4 * 128 * 8 / 512,
+    weight_decay=0.05,
+    eps=1e-8,
+    betas=(0.9, 0.999),
+    paramwise_cfg=paramwise_cfg)
+optimizer_config = dict(grad_clip=dict(max_norm=5.0))
+
 # learning policy
-lr_config = dict(policy='step', step=[160, 220, 380])
-runner = dict(type='EpochBasedRunner', max_epochs=320)
+lr_config = dict(
+    policy='CosineAnnealing',
+    by_epoch=False,
+    min_lr_ratio=1e-2,
+    warmup='linear',
+    warmup_ratio=1e-3,
+    warmup_iters=500,
+    warmup_by_epoch=False)
+
+runner = dict(type='EpochBasedRunner', max_epochs=400)
 
 log_config = dict(
     interval=10,
@@ -92,10 +121,10 @@ log_config = dict(
         # dict(type='TensorboardLoggerHook')
     ])
 # yapf:enable
-checkpoint_config = dict(by_epoch=True, interval=2)
+checkpoint_config = dict(by_epoch=True, interval=1)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
 resume_from = None
-work_dir = 'work_dirs/whtj_stroke_resnextV1d34_baseconfig_pretraineds'
+work_dir = 'work_dirs/whtj_stroke_resnextV1d34_baseconfig_pretraineds_lr'
 workflow = [('train', 1)]

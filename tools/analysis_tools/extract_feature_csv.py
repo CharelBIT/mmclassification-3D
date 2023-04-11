@@ -57,22 +57,27 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
-    if hasattr(cfg.data, 'test'):
-        cfg.data.test.test_mode = True
-
-    try:
-        cfg.data.train.pipeline = cfg.feature_extract_pipeline
-        if hasattr(cfg.data, 'test'):
-            cfg.data.test.pipeline = cfg.feature_extract_pipeline
-    except:
-        print("[WARNING] 'feature_extract_pipline' not in cfg file "
-              "using test_pipline")
-        for operation in cfg.test_pipeline:
-            if operation['type'] == 'ToTensor' or operation['type'] == 'Collect':
-                operation['keys'] = ['img', 'gt_label']
-        cfg.data.train.pipeline = cfg.test_pipeline
-        if hasattr(cfg.data, 'test'):
-            cfg.data.test.pipeline = cfg.test_pipeline
+    # if hasattr(cfg.data, 'test'):
+    #     cfg.data.test.test_mode = True
+    #
+    # try:
+    #     cfg.data.train.pipeline = cfg.feature_extract_pipeline
+    #     if hasattr(cfg.data, 'test'):
+    #         cfg.data.test.pipeline = cfg.feature_extract_pipeline
+    # except:
+    #     print("[WARNING] 'feature_extract_pipeline' not in cfg file "
+    #           "using test_pipeline")
+    if hasattr(cfg, 'feature_extract_pipeline'):
+        cfg.test_pipeline = cfg.feature_extract_pipeline
+    else:
+        print("[WARNING] 'feature_extract_pipeline' not in cfg file "
+                  "using test_pipeline")
+    for operation in cfg.test_pipeline:
+        if operation['type'] == 'ToTensor' or operation['type'] == 'Collect':
+            operation['keys'] = ['img', 'gt_label']
+    # cfg.data.train.pipeline = cfg.test_pipeline
+    # if hasattr(cfg.data, 'test'):
+    #     cfg.data.test.pipeline = cfg.test_pipeline
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
@@ -84,10 +89,22 @@ def main():
     # build the dataloader
     # dataset = build_dataset(cfg.data.test)
     # the extra round_up data will be removed during gpu/cpu collect
+    cfg.data.train.pipeline = cfg.test_pipeline
+    print(f"[INFO] train data extract pipeline {cfg.data.train.pipeline}")
     train_dataset = build_dataset(cfg.data.train)
-    test_dataset = None
+
+    cfg.data.val.pipeline = cfg.test_pipeline
+    print(f"[INFO] val data extract pipeline {cfg.data.train.pipeline}")
+    val_dataset = build_dataset(cfg.data.val)
+    test_datasets = []
     if hasattr(cfg.data, 'test'):
-        test_dataset = build_dataset(cfg.data.test)
+        if isinstance(cfg.data.test, list):
+            for test_cfg in cfg.data.test:
+                test_cfg.pipeline = cfg.test_pipeline
+                test_datasets.append(build_dataset(test_cfg))
+        else:
+            cfg.data.test.pipeline = cfg.test_pipeline
+            test_datasets = [build_dataset(cfg.data.test)]
     # build the model and load checkpoint
     model = build_classifier(cfg.model)
     fp16_cfg = cfg.get('fp16', None)
@@ -98,7 +115,6 @@ def main():
     results = []
     model = model.to("cuda:{}".format(args.gpu_idx))
     pbar = tqdm(train_dataset)
-    test_count = 1
     for i, d in enumerate(pbar):
         # if i > test_count:
         #     break
@@ -108,21 +124,45 @@ def main():
             result = dict(file_name=d['img_metas'].data['filename'],
                           features=feats,
                           gt_label=d['gt_label'].item(),
-                          train=1)
+                          data_priority=0)
             results.append(result)
-    if test_dataset is not None:
+    pbar = tqdm(val_dataset)
+
+    for i, d in enumerate(pbar):
+        # if i > test_count:
+        #     break
+        pbar.set_description("Val Dataset")
+        with torch.no_grad():
+            feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
+            result = dict(file_name=d['img_metas'].data['filename'],
+                          features=feats,
+                          gt_label=d['gt_label'].item(),
+                          data_priority=1)
+            results.append(result)
+    for test_dataset in test_datasets:
         pbar = tqdm(test_dataset)
         for i, d in enumerate(pbar):
-            # if i > test_count:
-            #     break
             pbar.set_description("Test Dataset")
             with torch.no_grad():
                 feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
                 result = dict(file_name=d['img_metas'].data['filename'],
                               features=feats,
                               gt_label=d['gt_label'].cpu().item(),
-                              train=0)
+                              data_priority=i + 2)
                 results.append(result)
+    # if test_dataset is not None:
+    #     pbar = tqdm(test_dataset)
+    #     for i, d in enumerate(pbar):
+    #         # if i > test_count:
+    #         #     break
+    #         pbar.set_description("Test Dataset")
+    #         with torch.no_grad():
+    #             feats = model.extract_feat(d['img'][None, ...].to("cuda:{}".format(args.gpu_idx)))
+    #             result = dict(file_name=d['img_metas'].data['filename'],
+    #                           features=feats,
+    #                           gt_label=d['gt_label'].cpu().item(),
+    #                           train=0)
+    #             results.append(result)
     df = pd.DataFrame()
     for i, result in enumerate(results):
         feats = []
@@ -132,7 +172,7 @@ def main():
             for f in result['features']:
                 feats.extend(f[0].cpu().numpy().tolist())
         df.loc[i, 'file_name'] = result['file_name']
-        df.loc[i, 'train_sample'] = int(result['train'])
+        df.loc[i, 'data_priority'] = int(result['data_priority'])
         df.loc[i, 'Label'] = int(result['gt_label'])
         for j, f in enumerate(feats):
             df.loc[i, args.feature_name + '_' + str(j)] = f
